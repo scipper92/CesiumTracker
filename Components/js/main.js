@@ -25,7 +25,9 @@ function startup(Cesium) {
     var viewer = new Cesium.Viewer('cesiumContainer');
     var scene = viewer.scene;
 
- /*   var clock = viewer.clock;
+    var clock = viewer.clock;
+
+    var deg2rad = Math.PI/180;
 
     function icrf(scene, time) {
         if (scene.mode !== Cesium.SceneMode.SCENE3D) {
@@ -43,20 +45,28 @@ function startup(Cesium) {
 
      viewer.camera.flyHome(0);
 
-     scene.preRender.addEventListener(icrf);*/
+     scene.preRender.addEventListener(icrf);
      scene.globe.enableLighting = true;
 
     $("#orbitCalc").click(function(e){
         e.preventDefault();
+        viewer.dataSources.removeAll();
         var startD = new Date($("#startDate").val()+" "+$("#startTime").val());
         var endD = new Date($("#endDate").val()+" "+$("#endTime").val());
         var step = 60;// in seconds
         var name = $("#satellite").val();
+        var point  = {
+            longitude: deg2rad*$("#pointLng").val(),
+            latitude: deg2rad*$("#pointLat").val()
+        };
         var postObj = {
             start: startD.toISOString(),
             end: endD.toISOString(),
             sat: name,
             step: step,
+            roll: $("#maxRoll").val(),
+            view: $("#viewAngle").val(),
+            point: point,
             positions: []
         };
 
@@ -67,6 +77,7 @@ function startup(Cesium) {
         startD = startD.getTime();
         endD = endD.getTime();
 
+
         var milistep = step*1000; // in milliseconds
         /*var tleLine1 = '1 39731U 14024A   16273.79761109  .00000013  00000-0  17444-4 0  9991',
             tleLine2 = '2 39731  98.4446 350.0995 0001308  79.7336 280.4005 14.41995531127368';*/
@@ -75,33 +86,210 @@ function startup(Cesium) {
 
         for(var t = startD;t<=endD;t+=milistep){
             var now = new Date(t);
-            var positionAndVelocity = satellite.propagate(
-                satrec,
-                now.getUTCFullYear(),
-                now.getUTCMonth() + 1, // Note, this function requires months in range 1-12.
-                now.getUTCDate(),
-                now.getUTCHours(),
-                now.getUTCMinutes(),
-                now.getUTCSeconds()
-            );
-            var gmst = satellite.gstimeFromDate(
-                now.getUTCFullYear(),
-                now.getUTCMonth() + 1, // Note, this function requires months in range 1-12.
-                now.getUTCDate(),
-                now.getUTCHours(),
-                now.getUTCMinutes(),
-                now.getUTCSeconds()
-            );
-            var positionGd    = satellite.eciToGeodetic(positionAndVelocity.position, gmst);
+            var positionGd = satPos(now,satrec);
+            var longitudeStr = satellite.degreesLong(positionGd.longitude),
+                latitudeStr  = satellite.degreesLat(positionGd.latitude);/**/
             positions.push({
                 time: now.toISOString(),
-                /*
+/*
                 X: 1000*positionAndVelocity.position.x,
                 Y: 1000*positionAndVelocity.position.y,
                 Z: 1000*positionAndVelocity.position.z
-                */
-                lng: positionGd.longitude,
-                lat: positionGd.latitude,
+                /**/
+                lng: longitudeStr,
+                lat: latitudeStr,
+                h: 1000*positionGd.height
+            });
+        }
+        postObj.positions = positions;
+        console.log(postObj);
+        $.post("./Components/czmlWriter.php",postObj,function(data){
+            var res = JSON.parse(data);
+            viewer.dataSources.add(Cesium.CzmlDataSource.load(res.fname));
+
+        });
+    });
+
+    $("#prepogate").click(function(e){
+        e.preventDefault();
+        $(".track").remove();
+
+        var point  = {
+            longitude: deg2rad*$("#pointLng").val(),
+            latitude: deg2rad*$("#pointLat").val()
+        };
+        console.log(point);
+        viewer.dataSources.removeAll();
+        var startD = new Date($("#startDate").val()+" "+$("#startTime").val());
+        var endD = new Date($("#endDate").val()+" "+$("#endTime").val());
+        var step = 10;// in seconds
+        var name = $("#satellite").val();
+        var postObj = {
+            start: "",
+            end: "",
+            sat: name,
+            step: step,
+            roll: $("#maxRoll").val(),
+            view: $("#viewAngle").val(),
+            positions: [],
+            point: point
+        };
+        var roll = deg2rad*postObj.roll;
+        var index = tleList.find(function (tle) {
+            return tle.sat == name;
+        });
+
+        var milistep = step*1000; // in milliseconds
+        /*var tleLine1 = '1 39731U 14024A   16273.79761109  .00000013  00000-0  17444-4 0  9991',
+         tleLine2 = '2 39731  98.4446 350.0995 0001308  79.7336 280.4005 14.41995531127368';*/
+        var satrec = satellite.twoline2satrec(index.tle1, index.tle2);
+        var period = 12*3600000/Math.PI/index.tle2.slice(52,62);
+        var inclination = Math.sin(deg2rad*index.tle2.slice(8,15));
+        console.log(inclination);
+        var orbDelta = 2*Math.PI/index.tle2.slice(52,62);
+        console.log(orbDelta);
+        var positions;
+
+     /*   for(var t = startD;t<=endD;t+=milistep){
+            var now = new Date(t);
+            console.log(now.getUTCHours());*/
+
+        var t = startD.getTime();
+        endD = endD.getTime();
+        var now;
+        var res = catchPoint(point,satrec,startD,roll);
+        //trackList = [];
+        var trackItem = 0;
+        while (t<endD) {
+            var iter = 0;
+            positions = [];
+            while (res.dist > res.capture && t<endD) {
+                iter++;
+                if(res.dist<2*res.capture /*&& res.vz * (point.latitude - res.position.latitude) > 0*/){
+                    console.log('near');
+                    t += Math.max((res.dist - res.capture) * period, milistep);
+                } else if (res.vz * (point.latitude - res.position.latitude) > 2 * res.capture) {
+                    t += Math.abs(Math.asin(Math.sin(point.latitude - res.vz * res.capture) / inclination) - Math.asin(Math.sin(res.position.latitude) / inclination)) * period;
+                    console.log('lat1');
+                } else if (res.vz * (point.latitude - res.position.latitude) < -res.capture) {
+                    t += (2 * Math.PI - Math.abs(Math.asin(Math.sin(point.latitude - res.vz * res.capture) / inclination) - Math.asin(Math.sin(res.position.latitude) / inclination))) * period;
+                    console.log('lat2');
+                } else if (Math.abs(point.longitude - res.position.longitude) > 4*res.capture) {
+                    console.log('lng');
+                    var t1 = t + 2 * Math.acos(res.vz * Math.sin(res.position.latitude) / inclination) * period;
+                    now = new Date(t1);
+                //    console.log('t1:', now);
+                    var pos = satPos(now, satrec);
+                //    console.log('tmp:', pos);
+                    var l1 = fmod(2 * Math.PI - point.longitude + res.position.longitude, 2 * Math.PI),
+                        l2 = fmod(2 * Math.PI - point.longitude + pos.longitude, 2 * Math.PI);
+                    var p1 = fabs(l1, orbDelta), p2 = fabs(l2, orbDelta);
+                    //console.log(p1, p2);
+                    while (p1.r > 2*res.capture && p2.r > 2*res.capture) {
+                        l1 += 2 * Math.PI;
+                        l2 += 2 * Math.PI;
+                        p1 = fabs(l1, orbDelta);
+                        p2 = fabs(l2, orbDelta);
+                     //   console.log(p1, p2);
+                    }
+                    t = (p1.r < p2.r) ? t + p1.d * period : t1 + p2.d * period;
+                }
+                /* else {
+                 t += (2*Math.PI-res.dist-res.capture)*period;
+                 }*/
+                now = new Date(t);
+             //   console.log(now);
+                res = catchPoint(point, satrec, now, roll);
+            }
+
+            if(t>=endD) break;
+
+            if (res.vz * (point.latitude - res.position.latitude) <= 0) {
+                t += res.vz * (point.latitude - res.position.latitude)*period;
+            }
+            now = new Date(t);
+            //   console.log(now);
+            res = catchPoint(point, satrec, now, roll);
+            iter++;
+
+            postObj.start = now.toISOString();/*
+            var track = {
+                date: now.toDateString(),
+                src: ""
+            };*/
+            var prev;
+
+            while (res.dist < res.capture) {
+                iter++;
+                var longitudeStr = satellite.degreesLong(res.position.longitude),
+                    latitudeStr = satellite.degreesLat(res.position.latitude);
+                /**/
+                positions.push({
+                    time: now.toISOString(),
+                    /*
+                     X: 1000*positionAndVelocity.position.x,
+                     Y: 1000*positionAndVelocity.position.y,
+                     Z: 1000*positionAndVelocity.position.z
+                     /**/
+                    lng: longitudeStr,
+                    lat: latitudeStr,
+                    h: 1000 * res.position.height
+                });
+                t += milistep;
+                prev = now;
+                now = new Date(t);
+            //    console.log(now);
+                res = catchPoint(point, satrec, now, roll);
+            }
+            postObj.end = prev.toISOString();
+            postObj.positions = [];
+            postObj.positions = positions;
+            console.log(iter+" iterations spent");
+            console.log(postObj);
+
+            $.post("./Components/czmlWriter.php", postObj).done(function (data) {
+                var res = JSON.parse(data);
+                var prevTrack = "#track-"+trackItem;
+                trackItem++;
+                $(prevTrack).after("<a href=\"#\" class=\"list-group-item track\" id=\"track-" + trackItem + "\">" + res.date + "</a>");
+                prevTrack = "#track-" + trackItem;
+                $(prevTrack).click(function (e) {
+                    e.preventDefault();
+                    viewer.dataSources.removeAll();
+                    viewer.dataSources.add(Cesium.CzmlDataSource.load(res.fname));
+                });
+            });/*, function (res) {
+                track.src = res;
+                trackList.push(track);
+            });*/
+            t += Math.PI * period;
+            now = new Date(t);
+        //    console.log(now);
+            res = catchPoint(point, satrec, now, roll);
+        }/*
+        console.log(trackList);
+
+
+        //$(document).ajaxStop(function() {
+        for (var i = 0; i < trackList.length;) {
+            trackList[i].done(function () {
+
+                var j = i + 1;
+
+            });
+        }
+
+    /*        var longitudeStr = satellite.degreesLong(positionGd.longitude),
+                latitudeStr  = satellite.degreesLat(positionGd.latitude);
+            positions.push({
+                time: now.toISOString(),
+                /*
+                 X: 1000*positionAndVelocity.position.x,
+                 Y: 1000*positionAndVelocity.position.y,
+                 Z: 1000*positionAndVelocity.position.z
+
+                lng: longitudeStr,
+                lat: latitudeStr,
                 h: 1000*positionGd.height
             });
         }
@@ -110,8 +298,10 @@ function startup(Cesium) {
         $.post("./Components/czmlWriter.php",postObj,function(res){
             viewer.dataSources.add(Cesium.CzmlDataSource.load(res));
 
-        });
+        });*/
     });
+
+
 //    viewer = new Cesium.CesiumWidget('cesiumContainer');
 //Sandcastle_End
 //    Sandcastle.finishedLoading();
@@ -128,17 +318,6 @@ $(function() {
 $("#menu-toggle").click(function(e) {
     e.preventDefault();
     $("#wrapper").toggleClass("toggled");
-    /*
-    sidebar  = $("#sidebar-wrapper");
-    console.log(sidebar.css("width"));
-    if (sidebar.css("width") == "0px"){
-        sidebar.animate({width: "250px"});
-        //sidebar.css("width","250px");
-    } else {
-        sidebar.animate({width: "0"});
-       // sidebar.css("width","0");
-    }
-    //$("#sidebar-wrapper").slideToggle("slow");*/
 });
 /*
 $("#orbitCalc").click(function (e) {
@@ -174,3 +353,55 @@ $("#orbitCalc").click(function (e) {
 
 })
 */
+
+function satPos(now,satrec) {
+    var positionAndVelocity = satellite.propagate(
+        satrec,
+        now.getUTCFullYear(),
+        now.getUTCMonth() + 1, // Note, this function requires months in range 1-12.
+        now.getUTCDate(),
+        now.getUTCHours(),
+        now.getUTCMinutes(),
+        now.getUTCSeconds()
+    );
+    var gmst = satellite.gstimeFromDate(
+        now.getUTCFullYear(),
+        now.getUTCMonth() + 1, // Note, this function requires months in range 1-12.
+        now.getUTCDate(),
+        now.getUTCHours(),
+        now.getUTCMinutes(),
+        now.getUTCSeconds()
+    );
+    return satellite.eciToGeodetic(positionAndVelocity.position, gmst);
+}
+
+function catchPoint(point,satrec,now,roll) {
+    var positionAndVelocity = satellite.propagate(
+        satrec,
+        now.getUTCFullYear(),
+        now.getUTCMonth() + 1, // Note, this function requires months in range 1-12.
+        now.getUTCDate(),
+        now.getUTCHours(),
+        now.getUTCMinutes(),
+        now.getUTCSeconds()
+    );
+    var gmst = satellite.gstimeFromDate(
+        now.getUTCFullYear(),
+        now.getUTCMonth() + 1, // Note, this function requires months in range 1-12.
+        now.getUTCDate(),
+        now.getUTCHours(),
+        now.getUTCMinutes(),
+        now.getUTCSeconds()
+    );
+    var positionGd = satellite.eciToGeodetic(positionAndVelocity.position, gmst);
+    console.log(positionGd);
+    var res = {
+        dist: distEarthLatLng(point,positionGd),
+        capture: captureRadius(positionGd.latitude,roll,positionGd.height),
+        position: positionGd,
+        vz: positionAndVelocity.velocity.z/Math.abs(positionAndVelocity.velocity.z)
+    };
+   // console.log(res);
+    return res;
+}
+

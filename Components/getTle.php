@@ -5,6 +5,10 @@
  * Date: 30.09.2016
  * Time: 15:44
  */
+function sat_sort($a,$b){
+    return -strcmp($a['sat'],$b['sat']);
+}
+
 $fd = fopen('http://www.celestrak.com/NORAD/elements/resource.txt',"r");
 $tle = array();
 while(!feof($fd)){
@@ -18,4 +22,5 @@ while(!feof($fd)){
     );
 }
 fclose($fd);
+usort($tle,"sat_sort");
 echo json_encode($tle);

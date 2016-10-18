@@ -6,12 +6,25 @@
  * Time: 15:37
  */
 if(isset($_POST)){
+    $stamp = microtime(true);
+    $home = getcwd();
+    chdir('./czml');
+    $dir = scandir('.');
+    $expire = 600;
+    foreach ($dir as $file){
+        if(is_file($file) && $stamp - filectime($file)> $expire){
+            unlink($file);
+        }
+    }
+    chdir($home);
     $interval = $_POST['start'].'/'.$_POST['end'];
-    $fname = $_POST['sat'].'.czml';
+    $fname = $_POST['sat'].'_'.$stamp.'.czml';
     $position = $_POST['positions'];
     $n = count($position);
     $fd = fopen('./czml/'.$fname,"w");
     $step = $_POST['step'];
+    $Roll = tan(deg2rad($_POST['roll']))*$position[0]['h'];
+    $view = tan(deg2rad(0.5*$_POST['view']))*$position[0]['h'];
     fwrite($fd,'[
   {
     "id":"document",
@@ -20,11 +33,41 @@ if(isset($_POST)){
     "clock":{
       "interval":"'.$interval.'",
       "currentTime":"'.$_POST['start'].'",
-      "multiplier":1,
+      "multiplier":60,
       "range":"LOOP_STOP",
       "step":"SYSTEM_CLOCK_MULTIPLIER"
     }
   },');
+    if(isset($_POST['point'])){
+        $lat = $_POST['point']['latitude'];
+        $lng = $_POST['point']['longitude'];
+
+        fwrite($fd,'
+  {
+    "id":"point",
+    "name":"('.$lat.';'.$lng.')",
+    "billboard":{
+      "eyeOffset":{
+        "cartesian":[
+          0,0,0
+        ]
+      },
+      "horizontalOrigin":"CENTER",
+      "image":"../images/facility.gif",
+      "pixelOffset":{
+        "cartesian2":[
+          0,0
+        ]
+      },
+      "scale":1.5,
+      "show":true,
+      "verticalOrigin":"CENTER"
+    },
+    "position":{
+      "cartographicRadians":['.$lng.','.$lat.',10000]
+    }
+  },');
+    }
     $img = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAADJSURBVDhPnZHRDcMgEEMZjVEYpaNklIzSEfLfD4qNnXAJSFWfhO7w2Zc0Tf9QG2rXrEzSUeZLOGm47WoH95x3Hl3jEgilvDgsOQUTqsNl68ezEwn1vae6lceSEEYvvWNT/Rxc4CXQNGadho1NXoJ+9iaqc2xi2xbt23PJCDIB6TQjOC6Bho/sDy3fBQT8PrVhibU7yBFcEPaRxOoeTwbwByCOYf9VGp1BYI1BA+EeHhmfzKbBoJEQwn1yzUZtyspIQUha85MpkNIXB7GizqDEECsAAAAASUVORK5CYII=';
     fwrite($fd,'
   {
@@ -47,6 +90,31 @@ if(isset($_POST)){
       "scale":1.5,
       "show":true,
       "verticalOrigin":"CENTER"
+    },
+    "cylinder":{
+      "length":'.$position[0]['h'] .',
+      "topRadius":0.0,
+      "bottomRadius":'.$view.',
+      "material":{
+        "solidColor":{
+          "color":{
+            "rgba":[
+              0,255,0,128
+            ]
+          }
+        }
+      }
+    },
+    "ellipse":{
+      "semiMinorAxis":'.$Roll.',
+      "semiMajorAxis":'.$Roll.',
+      "fill": false,
+      "outline":true,
+      "outlineColor":{
+        "rgba":[
+          255,0,0,255
+        ]
+      }
     },
     "label":{
       "fillColor":{
@@ -146,9 +214,9 @@ if(isset($_POST)){
     "position":{
       "interpolationAlgorithm":"LAGRANGE",
       "interpolationDegree":5,
-      "referenceFrame":"INERTIAL",
+      "referenceFrame":"FIXED",
       "epoch":"'.$_POST['start'].'",
-      "cartographicRadians":[
+      "cartographicDegrees":[
       '
     );
 
@@ -156,16 +224,17 @@ if(isset($_POST)){
     $t = 0;
 
     for($i=0;$i<$n-1;$i++){
-        //fwrite($fd,"  ".$position[$i]['time'].",".$position[$i]['X'].",".$position[$i]['Y'].",".$position[$i]['Y'].",\n      ");
+        //fwrite($fd,"  ".$t.",".$position[$i]['X'].",".$position[$i]['Y'].",".$position[$i]['Y'].",\n      ");
         fwrite($fd,"  ".$t.",".$position[$i]['lng'].",".$position[$i]['lat'].",".$position[$i]['h'].",\n      ");
         $t += $step;
     }
-   // fwrite($fd,"  ".$position[$n-1]['time'].",".$position[$n-1]['X'].",".$position[$n-1]['Y'].",".$position[$n-1]['Y']."\n      ");
+   // fwrite($fd,"  ".$t.",".$position[$n-1]['X'].",".$position[$n-1]['Y'].",".$position[$n-1]['Y']."\n      ");
     fwrite($fd,"  ".$t.",".$position[$i]['lng'].",".$position[$i]['lat'].",".$position[$i]['h']."\n      ");
     fwrite($fd,']
     }
   }
 ]');
     fclose($fd);
-    echo './Components/czml/'.$fname;
+    $res = array('date'=>$_POST['start'],'fname'=>'./Components/czml/'.$fname);
+    echo json_encode($res);
 }
