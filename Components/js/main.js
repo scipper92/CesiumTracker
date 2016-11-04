@@ -48,6 +48,23 @@ function startup(Cesium) {
      scene.preRender.addEventListener(icrf);
      scene.globe.enableLighting = true;
 
+    // Mouse over the globe to see the cartographic position
+    var handler = new Cesium.ScreenSpaceEventHandler(scene.canvas);
+    handler.setInputAction(function(movement) {
+        //console.log(movement);
+        var cartesian = viewer.camera.pickEllipsoid(movement.position, scene.globe.ellipsoid);
+        if (cartesian) {
+            var cartographic = Cesium.Cartographic.fromCartesian(cartesian);
+            //var longitudeString =
+            $("#pointLng").val(Cesium.Math.toDegrees(cartographic.longitude).toFixed(2));
+            $("#pointLat").val(Cesium.Math.toDegrees(cartographic.latitude).toFixed(2));
+            //var latitudeString = ;
+
+           // console.log(longitudeString,latitudeString);
+
+        }
+    }, Cesium.ScreenSpaceEventType.LEFT_DOUBLE_CLICK);
+
     $("#orbitCalc").click(function(e){
         e.preventDefault();
         viewer.dataSources.removeAll();
@@ -124,6 +141,7 @@ function startup(Cesium) {
         var endD = new Date($("#endDate").val()+" "+$("#endTime").val());
         var step = 10;// in seconds
         var name = $("#satellite").val();
+        var minSun = deg2rad*$("#SunAngle").val();
         var postObj = {
             start: "",
             end: "",
@@ -169,14 +187,14 @@ function startup(Cesium) {
                     console.log('near');
                     t += Math.max((res.dist - res.capture) * period, milistep);
                 } else if (res.vz * (point.latitude - res.position.latitude) > 2 * res.capture) {
-                    t += Math.abs(Math.asin(Math.sin(point.latitude - res.vz * res.capture) / inclination) - Math.asin(Math.sin(res.position.latitude) / inclination)) * period;
+                    t += Math.abs(arcsin(Math.sin(point.latitude - res.vz * res.capture) / inclination) - arcsin(Math.sin(res.position.latitude) / inclination)) * period;
                     console.log('lat1');
                 } else if (res.vz * (point.latitude - res.position.latitude) < -res.capture) {
-                    t += (2 * Math.PI - Math.abs(Math.asin(Math.sin(point.latitude - res.vz * res.capture) / inclination) - Math.asin(Math.sin(res.position.latitude) / inclination))) * period;
+                    t += (2 * Math.PI - Math.abs(arcsin(Math.sin(point.latitude - res.vz * res.capture) / inclination) - arcsin(Math.sin(res.position.latitude) / inclination))) * period;
                     console.log('lat2');
                 } else if (Math.abs(point.longitude - res.position.longitude) > 4*res.capture) {
                     console.log('lng');
-                    var t1 = t + 2 * Math.acos(res.vz * Math.sin(res.position.latitude) / inclination) * period;
+                    var t1 = t + 2 * arccos(res.vz * Math.sin(res.position.latitude) / inclination) * period;
                     now = new Date(t1);
                 //    console.log('t1:', now);
                     var pos = satPos(now, satrec);
@@ -192,7 +210,7 @@ function startup(Cesium) {
                         p2 = fabs(l2, orbDelta);
                      //   console.log(p1, p2);
                     }
-                    t = (p1.r < p2.r) ? t + p1.d * period : t1 + p2.d * period;
+                    t = (p1.r < p2.r && p1.d > 0) ? t + p1.d * period : t1 + p2.d * period;
                 }
                 /* else {
                  t += (2*Math.PI-res.dist-res.capture)*period;
@@ -217,7 +235,7 @@ function startup(Cesium) {
                 date: now.toDateString(),
                 src: ""
             };*/
-            var prev;
+            var prev = now;
 
             while (res.dist < res.capture) {
                 iter++;
@@ -246,19 +264,21 @@ function startup(Cesium) {
             postObj.positions = positions;
             console.log(iter+" iterations spent");
             console.log(postObj);
-
-            $.post("./Components/czmlWriter.php", postObj).done(function (data) {
-                var res = JSON.parse(data);
-                var prevTrack = "#track-"+trackItem;
-                trackItem++;
-                $(prevTrack).after("<a href=\"#\" class=\"list-group-item track\" id=\"track-" + trackItem + "\">" + res.date + "</a>");
-                prevTrack = "#track-" + trackItem;
-                $(prevTrack).click(function (e) {
-                    e.preventDefault();
-                    viewer.dataSources.removeAll();
-                    viewer.dataSources.add(Cesium.CzmlDataSource.load(res.fname));
+            if(positions.length > 0 && SunAngles(prev,res.position)>minSun){
+                $.post("./Components/czmlWriter.php", postObj).done(function (data) {
+                    var res = JSON.parse(data);
+                    var prevTrack = "#track-"+trackItem;
+                    trackItem++;
+                    $(prevTrack).after("<a href=\"#\" class=\"list-group-item track\" id=\"track-" + trackItem + "\">" + res.date + "</a>");
+                    prevTrack = "#track-" + trackItem;
+                    $(prevTrack).click(function (e) {
+                        e.preventDefault();
+                        viewer.dataSources.removeAll();
+                        viewer.dataSources.add(Cesium.CzmlDataSource.load(res.fname));
+                    });
                 });
-            });/*, function (res) {
+            }
+            /*, function (res) {
                 track.src = res;
                 trackList.push(track);
             });*/
