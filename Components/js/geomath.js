@@ -87,7 +87,7 @@ function JulianDate(date) {
     var base = new Date("2000-01-01T00:00:00Z");
     JD.d = (date.getTime() - base.getTime())/24/3600/1000;
     //console.log(d);
-    console.log(JD);
+    //console.log(JD);
     return JD;
 }
 
@@ -132,7 +132,7 @@ function SideralTime(Ls,UT,lng) {
 function SunAngles(date,pos) {
     var JD = JulianDate(date);
     var Sun = SunPos(JD.d);
-    console.log(Sun);
+   // console.log(Sun);
     var LST = SideralTime(Sun.LS,JD.UT,pos.longitude);
     var HA = LST - Sun.RA;
     var x = Math.cos(HA) * Math.cos(Sun.Decl),

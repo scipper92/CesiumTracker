@@ -66,6 +66,7 @@ function startup(Cesium) {
     }, Cesium.ScreenSpaceEventType.LEFT_DOUBLE_CLICK);
 
     $("#orbitCalc").click(function(e){
+        var tic = Date.now();
         e.preventDefault();
         viewer.dataSources.removeAll();
         var startD = new Date($("#startDate").val()+" "+$("#startTime").val());
@@ -123,11 +124,14 @@ function startup(Cesium) {
         $.post("./Components/czmlWriter.php",postObj,function(data){
             var res = JSON.parse(data);
             viewer.dataSources.add(Cesium.CzmlDataSource.load(res.fname));
-
+            return;
         });
+        tic = Date.now() - tic;
+        console.log( tic + " miliseconds perfomed");
     });
 
     $("#prepogate").click(function(e){
+        var tic = Date.now();
         e.preventDefault();
         $(".track").remove();
 
@@ -135,7 +139,7 @@ function startup(Cesium) {
             longitude: deg2rad*$("#pointLng").val(),
             latitude: deg2rad*$("#pointLat").val()
         };
-        console.log(point);
+        //console.log(point);
         viewer.dataSources.removeAll();
         var startD = new Date($("#startDate").val()+" "+$("#startTime").val());
         var endD = new Date($("#endDate").val()+" "+$("#endTime").val());
@@ -163,9 +167,9 @@ function startup(Cesium) {
         var satrec = satellite.twoline2satrec(index.tle1, index.tle2);
         var period = 12*3600000/Math.PI/index.tle2.slice(52,62);
         var inclination = Math.sin(deg2rad*index.tle2.slice(8,15));
-        console.log(inclination);
+       // console.log(inclination);
         var orbDelta = 2*Math.PI/index.tle2.slice(52,62);
-        console.log(orbDelta);
+       // console.log(orbDelta);
         var positions;
 
      /*   for(var t = startD;t<=endD;t+=milistep){
@@ -184,16 +188,16 @@ function startup(Cesium) {
             while (res.dist > res.capture && t<endD) {
                 iter++;
                 if(res.dist<2*res.capture /*&& res.vz * (point.latitude - res.position.latitude) > 0*/){
-                    console.log('near');
+                    //console.log('near');
                     t += Math.max((res.dist - res.capture) * period, milistep);
                 } else if (res.vz * (point.latitude - res.position.latitude) > 2 * res.capture) {
                     t += Math.abs(arcsin(Math.sin(point.latitude - res.vz * res.capture) / inclination) - arcsin(Math.sin(res.position.latitude) / inclination)) * period;
-                    console.log('lat1');
+                   // console.log('lat1');
                 } else if (res.vz * (point.latitude - res.position.latitude) < -res.capture) {
                     t += (2 * Math.PI - Math.abs(arcsin(Math.sin(point.latitude - res.vz * res.capture) / inclination) - arcsin(Math.sin(res.position.latitude) / inclination))) * period;
-                    console.log('lat2');
+                   // console.log('lat2');
                 } else if (Math.abs(point.longitude - res.position.longitude) > 4*res.capture) {
-                    console.log('lng');
+                   // console.log('lng');
                     var t1 = t + 2 * arccos(res.vz * Math.sin(res.position.latitude) / inclination) * period;
                     now = new Date(t1);
                 //    console.log('t1:', now);
@@ -244,11 +248,6 @@ function startup(Cesium) {
                 /**/
                 positions.push({
                     time: now.toISOString(),
-                    /*
-                     X: 1000*positionAndVelocity.position.x,
-                     Y: 1000*positionAndVelocity.position.y,
-                     Z: 1000*positionAndVelocity.position.z
-                     /**/
                     lng: longitudeStr,
                     lat: latitudeStr,
                     h: 1000 * res.position.height
@@ -262,8 +261,8 @@ function startup(Cesium) {
             postObj.end = prev.toISOString();
             postObj.positions = [];
             postObj.positions = positions;
-            console.log(iter+" iterations spent");
-            console.log(postObj);
+            //console.log(iter+" iterations spent");
+            //console.log(postObj);
             if(positions.length > 0 && SunAngles(prev,res.position)>minSun){
                 $.post("./Components/czmlWriter.php", postObj).done(function (data) {
                     var res = JSON.parse(data);
@@ -276,55 +275,20 @@ function startup(Cesium) {
                         viewer.dataSources.removeAll();
                         viewer.dataSources.add(Cesium.CzmlDataSource.load(res.fname));
                     });
+                    return;
                 });
             }
-            /*, function (res) {
-                track.src = res;
-                trackList.push(track);
-            });*/
+
             t += Math.PI * period;
             now = new Date(t);
         //    console.log(now);
             res = catchPoint(point, satrec, now, roll);
-        }/*
-        console.log(trackList);
-
-
-        //$(document).ajaxStop(function() {
-        for (var i = 0; i < trackList.length;) {
-            trackList[i].done(function () {
-
-                var j = i + 1;
-
-            });
         }
-
-    /*        var longitudeStr = satellite.degreesLong(positionGd.longitude),
-                latitudeStr  = satellite.degreesLat(positionGd.latitude);
-            positions.push({
-                time: now.toISOString(),
-                /*
-                 X: 1000*positionAndVelocity.position.x,
-                 Y: 1000*positionAndVelocity.position.y,
-                 Z: 1000*positionAndVelocity.position.z
-
-                lng: longitudeStr,
-                lat: latitudeStr,
-                h: 1000*positionGd.height
-            });
-        }
-        postObj.positions = positions;
-        console.log(postObj);
-        $.post("./Components/czmlWriter.php",postObj,function(res){
-            viewer.dataSources.add(Cesium.CzmlDataSource.load(res));
-
-        });*/
+        tic = Date.now() - tic;
+        console.log( tic + " miliseconds perfomed");
     });
 
 
-//    viewer = new Cesium.CesiumWidget('cesiumContainer');
-//Sandcastle_End
-//    Sandcastle.finishedLoading();
 }
 
 $(function() {
@@ -339,40 +303,6 @@ $("#menu-toggle").click(function(e) {
     e.preventDefault();
     $("#wrapper").toggleClass("toggled");
 });
-/*
-$("#orbitCalc").click(function (e) {
-
-        /*
-
-        var positionEci = positionAndVelocity.position,
-            velocityEci = positionAndVelocity.velocity;
-
-        var gmst = satellite.gstimeFromDate(
-            now.getUTCFullYear(),
-            now.getUTCMonth() + 1, // Note, this function requires months in range 1-12.
-            now.getUTCDate(),
-            now.getUTCHours(),
-            now.getUTCMinutes(),
-            now.getUTCSeconds()
-        );
-
-        var positionEcf   = satellite.eciToEcf(positionEci, gmst),
-            //observerEcf   = satellite.geodeticToEcf(observerGd),
-            positionGd    = satellite.eciToGeodetic(positionEci, gmst);
-        //lookAngles    = satellite.ecfToLookAngles(observerGd, positionEcf);
-
-        var longitude = positionGd.longitude,
-            latitude  = positionGd.latitude,
-            height    = positionGd.height;
-
-        //  Convert the RADIANS to DEGREES for pretty printing (appends "N", "S", "E", "W". etc).
-        var longitudeStr = satellite.degreesLong(longitude),
-            latitudeStr  = satellite.degreesLat(latitude);
-
-        console.log(longitudeStr,latitudeStr,height);
-
-})
-*/
 
 function satPos(now,satrec) {
     var positionAndVelocity = satellite.propagate(
@@ -414,7 +344,7 @@ function catchPoint(point,satrec,now,roll) {
         now.getUTCSeconds()
     );
     var positionGd = satellite.eciToGeodetic(positionAndVelocity.position, gmst);
-    console.log(positionGd);
+   // console.log(positionGd);
     var res = {
         dist: distEarthLatLng(point,positionGd),
         capture: captureRadius(positionGd.latitude,roll,positionGd.height),
