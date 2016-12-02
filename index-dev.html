@@ -9,6 +9,7 @@
     <title>Cesium Demo</title>
     <link href="./Components/bootstrap/css/bootstrap.min.css" rel="stylesheet">
     <link href="./Components/bootstrap/css/bootstrap-theme.min.css" rel="stylesheet">
+    <link href="./Components/font-awesome-4.7.0/css/font-awesome.min.css" rel="stylesheet">
     <link href="./Components/bootstrap/css/simple-sidebar.css" rel="stylesheet">
     <!--script type="text/javascript" src="./Apps/Sandcastle/Sandcastle-header.js"></script-->
     <script src="./Components/js/satellite.min.js"></script>
@@ -39,7 +40,7 @@
         </div>
         <div id="navbar" class="collapse navbar-collapse">
             <ul class="nav navbar-nav">
-                <li class="active"><a href="#">Home</a></li>
+                <li class="active"><a href="#"><i class="fa fa-home fa-fw" aria-hidden="true"></i> </a></li>
                 <li class="dropdown">
                     <a href="#" class="dropdown-toggle" data-toggle="dropdown" role="button" aria-haspopup="true" aria-expanded="false">Workspace</a>
                     <ul class="dropdown-menu">
@@ -48,7 +49,8 @@
                         <li><a href="#">Reload</a></li>
                     </ul>
                 </li>
-                <li><a href="#menu-toggle" class="btn btn-default" id="menu-toggle">&#9776;</a></li>
+                <li><a href="#menu-toggle" class="btn btn-default" id="menu-toggle"><i class="fa fa-list"></i> </a></li>
+                <li><a href="#" class="btn btn-default" id="polygon"><i class="fa fa-connectdevelop"></i></a></li>
                 <li><a href="#login">Log in</a></li>
             </ul>
         </div><!--/.nav-collapse -->
@@ -69,31 +71,31 @@
         <div class="form-group">
             <label class="control-label col-md-4" for="startDate">Start Date </label>
             <div class="col-md-8">
-                <input type="date" class="form-control" id="startDate">
+                <input type="date" class="form-control" id="startDate" required>
             </div>
         </div>
         <div class="form-group">
             <label class="control-label col-md-4" for="startTime">Start Time </label>
             <div class="col-md-8">
-                <input type="time" class="form-control" id="startTime">
+                <input type="time" class="form-control" id="startTime" required>
             </div>
         </div>
         <div class="form-group">
             <label class="control-label col-md-4" for="endDate">End Date </label>
             <div class="col-md-8">
-                <input type="date" class="form-control" id="endDate">
+                <input type="date" class="form-control" id="endDate" required>
             </div>
         </div>
         <div class="form-group">
             <label class="control-label col-md-4" for="endTime">End Time </label>
             <div class="col-md-8">
-                <input type="time" class="form-control" id="endTime">
+                <input type="time" class="form-control" id="endTime" required>
             </div>
         </div>
         <div class="form-group">
             <label class="control-label col-md-4" for="maxRoll">Max Roll </label>
             <div class="col-md-8">
-                <input type="number" class="form-control" min="0" max="45" value="30" id="maxRoll">
+                <input type="number" class="form-control" min="0" max="45" value="30" id="maxRoll" required>
             </div>
         </div>
         <div class="form-group">
@@ -111,13 +113,13 @@
         <div class="form-group">
             <label class="control-label col-md-4" for="pointLat">Latitude </label>
             <div class="col-md-8">
-                <input type="number" class="form-control" min="-90" max="90" step="0.01" value="52" id="pointLat">
+                <input type="text" class="form-control" value="" id="pointLat">
             </div>
         </div>
         <div class="form-group">
             <label class="control-label col-md-4" for="pointLng">Longitude </label>
             <div class="col-md-8">
-                <input type="number" class="form-control" min="-180" max="180" step="0.01" value="72" id="pointLng">
+                <input type="text" class="form-control"  value="" id="pointLng">
             </div>
         </div>
         <div class="form-group">

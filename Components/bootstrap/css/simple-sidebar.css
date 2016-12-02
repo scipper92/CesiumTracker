@@ -148,3 +148,14 @@
     background: #ffffff;
     font: inherit;
 }
+
+#navbar li {
+    margin-left: 5px;
+    margin-right: 5px;
+}
+
+#navbar a {
+    padding: 15px;
+    font-family: sans-serif;
+    font-size: 18pt;
+}

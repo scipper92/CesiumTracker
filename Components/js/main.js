@@ -22,12 +22,25 @@ function startup(Cesium) {
 // it does not include the animation, imagery selection,
 // and other viewers, nor does it depend on the third-party
 // Knockout library.
-    var viewer = new Cesium.Viewer('cesiumContainer');
+    var viewer = new Cesium.Viewer('cesiumContainer',{ infoBox : false });
     var scene = viewer.scene;
 
     var clock = viewer.clock;
 
     var deg2rad = Math.PI/180;
+
+    function drawShape(points){
+        viewer.entities.add({
+            polygon : {
+                hierarchy: Cesium.Cartesian3.fromDegreesArray(points),
+                material : Cesium.Color.RED.withAlpha(0.5),
+                outline: true,
+                outlineColor: Cesium.Color.BLACK
+            }
+
+        });
+    }
+
 
     function icrf(scene, time) {
         if (scene.mode !== Cesium.SceneMode.SCENE3D) {
@@ -58,12 +71,69 @@ function startup(Cesium) {
             //var longitudeString =
             $("#pointLng").val(Cesium.Math.toDegrees(cartographic.longitude).toFixed(2));
             $("#pointLat").val(Cesium.Math.toDegrees(cartographic.latitude).toFixed(2));
-            //var latitudeString = ;
-
-           // console.log(longitudeString,latitudeString);
-
         }
     }, Cesium.ScreenSpaceEventType.LEFT_DOUBLE_CLICK);
+
+    $("#polygon").click(function () {
+        var li = $("#polygon").parent();
+        if(li.hasClass("active")){
+            li.removeClass("active");
+            return;
+        }
+
+        li.addClass("active");
+        $("#pointLng").val("");
+        $("#pointLat").val("");
+        viewer.entities.removeAll();
+        var points = [];
+        handler.setInputAction(function(event) {
+            var cartesian = viewer.camera.pickEllipsoid(event.position, scene.globe.ellipsoid);
+
+            if (cartesian) {
+                var cartographic = Cesium.Cartographic.fromCartesian(cartesian);
+
+                var longitude = Cesium.Math.toDegrees(cartographic.longitude).toFixed(2);
+                var latitude = Cesium.Math.toDegrees(cartographic.latitude).toFixed(2);
+
+                $("#pointLat").val(function (i,old) {
+                    if (old === ""){
+                        return latitude;
+                    } else {
+                        return old + "," + latitude
+                    }
+                });
+                $("#pointLng").val(function (i,old) {
+                    if (old === "") {
+                        return longitude;
+                    } else {
+                        return old + "," + longitude
+                    }
+                });
+
+                viewer.entities.add({
+                    position : Cesium.Cartesian3.fromDegrees(longitude, latitude),
+                    point : {
+                        pixelSize : 5,
+                        color : Cesium.Color.YELLOW
+                    }
+                });
+
+                points.push(longitude);
+                points.push(latitude);
+
+            } else {
+                entity.label.show = false;
+            }
+
+        }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
+
+        handler.setInputAction(function(event) {
+            drawShape(points);
+            points = [];
+        }, Cesium.ScreenSpaceEventType.RIGHT_CLICK);
+    });
+
+
 
     $("#orbitCalc").click(function(e){
         var tic = Date.now();
