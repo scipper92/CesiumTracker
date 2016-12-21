@@ -4,6 +4,7 @@
 //var viewer;
 //var Cesium;
 var tleList;
+var deg2rad = Math.PI/180;
 
 $(function () {
     $.get("./Components/getTle.php",function (tle) {
@@ -26,8 +27,6 @@ function startup(Cesium) {
     var scene = viewer.scene;
 
     var clock = viewer.clock;
-
-    var deg2rad = Math.PI/180;
 
     function drawShape(points){
         viewer.entities.add({
@@ -67,17 +66,55 @@ function startup(Cesium) {
         //console.log(movement);
         var cartesian = viewer.camera.pickEllipsoid(movement.position, scene.globe.ellipsoid);
         if (cartesian) {
+           // viewer.entities.removeAll();
             var cartographic = Cesium.Cartographic.fromCartesian(cartesian);
+            var longitude = Cesium.Math.toDegrees(cartographic.longitude).toFixed(2);
+            var latitude = Cesium.Math.toDegrees(cartographic.latitude).toFixed(2);
             //var longitudeString =
-            $("#pointLng").val(Cesium.Math.toDegrees(cartographic.longitude).toFixed(2));
-            $("#pointLat").val(Cesium.Math.toDegrees(cartographic.latitude).toFixed(2));
+            $("#pointLng").val(longitude);
+            $("#pointLat").val(latitude);
+            viewer.entities.add({
+                position : cartographic,
+                point : {
+                    pixelSize : 5,
+                    color : Cesium.Color.YELLOW
+                }
+            });
         }
     }, Cesium.ScreenSpaceEventType.LEFT_DOUBLE_CLICK);
+
+    function sendPost(postObj,res,prev,positions,minSun,trackItem) {
+        postObj.end = prev.toISOString();
+        postObj.positions = [];
+        postObj.positions = positions;
+        //console.log(iter+" iterations spent");
+        //console.log(postObj);
+        console.log(postObj);
+        //var newTrackItem = trackItem;
+        if(positions.length > 0 && SunAngles(prev,res.position)>minSun){
+            $.post("./Components/czmlWriter.php", postObj).done(function (data) {
+                var res = JSON.parse(data);
+                var prevTrack = "#track-"+trackItem;
+                trackItem++;
+                $(prevTrack).after("<a href=\"#\" class=\"list-group-item track\" id=\"track-" + trackItem + "\">" + res.date + "</a>");
+                prevTrack = "#track-" + trackItem;
+                $(prevTrack).click(function (e) {
+                    e.preventDefault();
+                    viewer.dataSources.removeAll();
+                    viewer.dataSources.add(Cesium.CzmlDataSource.load(res.fname));
+                });
+                return;
+            });
+        }
+        return trackItem;
+    }
 
     $("#polygon").click(function () {
         var li = $("#polygon").parent();
         if(li.hasClass("active")){
             li.removeClass("active");
+            handler.removeInputAction(Cesium.ScreenSpaceEventType.LEFT_CLICK);
+            handler.removeInputAction(Cesium.ScreenSpaceEventType.RIGHT_CLICK);
             return;
         }
 
@@ -133,7 +170,88 @@ function startup(Cesium) {
         }, Cesium.ScreenSpaceEventType.RIGHT_CLICK);
     });
 
-
+    function prep4poly(startD,endD,milistep,satrec,polygon,inclination,roll,orbDelta,period,minSun,postObj) {
+        var t = startD.getTime();
+        endD = endD.getTime();
+        var now;
+        var sat = satPosV(satrec,startD,roll);
+        var westWidth = polygon.west - polygon.east;
+        console.log(startD,sat);
+        var trackItem = 0;
+        while(t<endD){
+            var iter = 0;
+            var positions = [];
+            while(!polygon.isInside(sat)){
+                iter++;
+                if(polygon.isForNorth(sat)){
+                    console.log(">> North!");
+                    t += Math.abs(arcsin(Math.sin(polygon.north + sat.capture) / inclination) - arcsin(Math.sin(sat.position.latitude) / inclination)) * period;
+                } else if(polygon.isBackNorth(sat)) {
+                    console.log("<< North!");
+                    t += (2 * Math.PI - Math.abs(arcsin(Math.sin(polygon.south - sat.capture) / inclination) - arcsin(Math.sin(sat.position.latitude) / inclination))) * period;
+                } else if(polygon.isForSouth(sat))  {
+                    console.log(">> South!");
+                    t += Math.abs(arcsin(Math.sin(polygon.south - sat.capture) / inclination) - arcsin(Math.sin(sat.position.latitude) / inclination)) * period;
+                } else if(polygon.isBackSouth(sat))  {
+                    console.log("<< South!");
+                    t += (2 * Math.PI - Math.abs(arcsin(Math.sin(polygon.north + sat.capture) / inclination) - arcsin(Math.sin(sat.position.latitude) / inclination))) * period;
+                } else if(polygon.isFarWest(sat,inclination) || polygon.isFarEast(sat,inclination)){
+                    console.log("East");
+                    var t1 = sat.vz<0 ? t + (Math.acos(-Math.sin(sat.position.latitude)/inclination) + Math.acos(-Math.sin(polygon.south)/inclination))*period :
+                    t + (Math.acos(Math.sin(sat.position.latitude)/inclination) + Math.acos(Math.sin(polygon.north)/inclination))*period;
+                    now = new Date(t1);
+                    console.log('t1:', now);
+                    var sat1 = satPosV(satrec,now,roll);
+                    var b = polygon.captFromEast(sat,inclination), b1 = polygon.captFromEast(sat1,inclination);
+                    var l1 = fmod(2 * Math.PI - polygon.east + sat.position.longitude, 2 * Math.PI),
+                        l2 = fmod(2 * Math.PI - polygon.east + sat1.position.longitude, 2 * Math.PI);
+                    console.log(b,b1,l1,l2);
+                    var p1 = f2q(l1,orbDelta), p2 = f2q(l2,orbDelta);
+                    console.log(p1,p2);
+                    while((p1.r>b || p1.r<westWidth-sat.capture) && (p2.r>b1 || p2.r<westWidth-sat1.capture) ){
+                        l1+= 2*Math.PI;
+                        l2+= 2*Math.PI;
+                        p1 = f2q(l1,orbDelta);
+                        p2 = f2q(l2,orbDelta);
+                        console.log(p1,p2);
+                    }
+                    t = (p1.r<=b+sat.capture && p1.r>=westWidth-sat.capture) ? ((p2.r<=b1+sat1.capture && p2.r>=westWidth-sat1.capture) ? (p1.d <= p2.d ?
+                    t + p1.d*period : t1 + p2.d*period) : t + p1.d*period) : t1 + p2.d*period;
+                }   else {
+                    console.log("Near");
+                    var closeSide = polygon.closeExtSide(sat);
+                    console.log(closeSide);
+                    var i = closeSide.index;
+                    t += Math.max(closeSide.dist/(polygon.supLng[i]*Math.sqrt(1-inclination*inclination)+polygon.supLat[i]*inclination)*period,20000);
+                }
+                now = new Date(t);
+                sat = satPosV(satrec,now,roll);
+                console.log(now,sat);
+            }
+            if(t>=endD) break;
+            var prev = now;
+            postObj.start = now.toISOString();
+            while(polygon.isInside(sat)){
+                console.log("Inside");
+                iter++;
+                var longitudeStr = satellite.degreesLong(sat.position.longitude),
+                    latitudeStr = satellite.degreesLat(sat.position.latitude);
+                positions.push({
+                    time: now.toISOString(),
+                    lng: longitudeStr,
+                    lat: latitudeStr,
+                    h: 1000 * sat.position.height
+                });
+                t += milistep;
+                prev = now;
+                now = new Date(t);
+                sat = satPosV(satrec,now,roll);
+                // console.log(now,sat);
+            }
+            trackItem = sendPost(postObj,sat,prev,positions,minSun,trackItem);
+        }
+        return;
+    }
 
     $("#orbitCalc").click(function(e){
         var tic = Date.now();
@@ -154,7 +272,6 @@ function startup(Cesium) {
             step: step,
             roll: $("#maxRoll").val(),
             view: $("#viewAngle").val(),
-            point: point,
             positions: []
         };
 
@@ -204,10 +321,12 @@ function startup(Cesium) {
         var tic = Date.now();
         e.preventDefault();
         $(".track").remove();
+        var polygon = new Polygon($("#pointLng").val(),$("#pointLat").val());
+        console.log(polygon);
 
         var point  = {
-            longitude: deg2rad*$("#pointLng").val(),
-            latitude: deg2rad*$("#pointLat").val()
+            longitude: polygon.longitude[0],
+            latitude: polygon.latitude[0]
         };
         //console.log(point);
         viewer.dataSources.removeAll();
@@ -224,40 +343,35 @@ function startup(Cesium) {
             roll: $("#maxRoll").val(),
             view: $("#viewAngle").val(),
             positions: [],
-            point: point
+            point: polygon.isPoint ? point : []
         };
         var roll = deg2rad*postObj.roll;
         var index = tleList.find(function (tle) {
             return tle.sat == name;
         });
-
+        //console.log(postObj);
         var milistep = step*1000; // in milliseconds
-        /*var tleLine1 = '1 39731U 14024A   16273.79761109  .00000013  00000-0  17444-4 0  9991',
-         tleLine2 = '2 39731  98.4446 350.0995 0001308  79.7336 280.4005 14.41995531127368';*/
         var satrec = satellite.twoline2satrec(index.tle1, index.tle2);
         var period = 12*3600000/Math.PI/index.tle2.slice(52,62);
         var inclination = Math.sin(deg2rad*index.tle2.slice(8,15));
        // console.log(inclination);
         var orbDelta = 2*Math.PI/index.tle2.slice(52,62);
        // console.log(orbDelta);
-        var positions;
+        if(!polygon.isPoint){
+            prep4poly(startD,endD,milistep,satrec,polygon,inclination,roll,orbDelta,period,minSun,postObj);
+        }
 
-     /*   for(var t = startD;t<=endD;t+=milistep){
-            var now = new Date(t);
-            console.log(now.getUTCHours());*/
 
-        var t = startD.getTime();
-        endD = endD.getTime();
-        var now;
+        /*
         var res = catchPoint(point,satrec,startD,roll);
         //trackList = [];
-        var trackItem = 0;
+
         while (t<endD) {
             var iter = 0;
             positions = [];
             while (res.dist > res.capture && t<endD) {
                 iter++;
-                if(res.dist<2*res.capture /*&& res.vz * (point.latitude - res.position.latitude) > 0*/){
+                if(res.dist<2*res.capture){
                     //console.log('near');
                     t += Math.max((res.dist - res.capture) * period, milistep);
                 } else if (res.vz * (point.latitude - res.position.latitude) > 2 * res.capture) {
@@ -286,9 +400,6 @@ function startup(Cesium) {
                     }
                     t = (p1.r < p2.r && p1.d > 0) ? t + p1.d * period : t1 + p2.d * period;
                 }
-                /* else {
-                 t += (2*Math.PI-res.dist-res.capture)*period;
-                 }*/
                 now = new Date(t);
              //   console.log(now);
                 res = catchPoint(point, satrec, now, roll);
@@ -300,22 +411,16 @@ function startup(Cesium) {
                 t += res.vz * (point.latitude - res.position.latitude)*period;
             }
             now = new Date(t);
-            //   console.log(now);
             res = catchPoint(point, satrec, now, roll);
             iter++;
 
-            postObj.start = now.toISOString();/*
-            var track = {
-                date: now.toDateString(),
-                src: ""
-            };*/
+            postObj.start = now.toISOString();
             var prev = now;
 
             while (res.dist < res.capture) {
                 iter++;
                 var longitudeStr = satellite.degreesLong(res.position.longitude),
                     latitudeStr = satellite.degreesLat(res.position.latitude);
-                /**/
                 positions.push({
                     time: now.toISOString(),
                     lng: longitudeStr,
@@ -353,7 +458,7 @@ function startup(Cesium) {
             now = new Date(t);
         //    console.log(now);
             res = catchPoint(point, satrec, now, roll);
-        }
+        }*/
         tic = Date.now() - tic;
         console.log( tic + " miliseconds perfomed");
     });
@@ -396,6 +501,19 @@ function satPos(now,satrec) {
 }
 
 function catchPoint(point,satrec,now,roll) {
+    var sat = satPosV(satrec,now,roll);
+   // console.log(positionGd);
+    var res = {
+        dist: distEarthLatLng(point,positionGd),
+        capture: sat.capture,
+        position: sat.position,
+        vz: sat.vz
+    };
+   // console.log(res);
+    return res;
+}
+
+function satPosV(satrec,now,roll) {
     var positionAndVelocity = satellite.propagate(
         satrec,
         now.getUTCFullYear(),
@@ -414,14 +532,11 @@ function catchPoint(point,satrec,now,roll) {
         now.getUTCSeconds()
     );
     var positionGd = satellite.eciToGeodetic(positionAndVelocity.position, gmst);
-   // console.log(positionGd);
     var res = {
-        dist: distEarthLatLng(point,positionGd),
-        capture: captureRadius(positionGd.latitude,roll,positionGd.height),
         position: positionGd,
-        vz: positionAndVelocity.velocity.z/Math.abs(positionAndVelocity.velocity.z)
+        vz: positionAndVelocity.velocity.z/Math.abs(positionAndVelocity.velocity.z),
+        capture: captureRadius(positionGd.latitude,roll,positionGd.height),
     };
-   // console.log(res);
+    res.position.longitude = fb2p(res.position.longitude);
     return res;
 }
-

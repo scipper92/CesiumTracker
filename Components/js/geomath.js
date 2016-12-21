@@ -50,6 +50,24 @@ function fabs(x,q) {
     return p;
 }
 
+function fb2p(x) {
+    while(x>Math.PI)
+        x-=2*Math.PI;
+    while(x<-Math.PI)
+        x+=2*Math.PI;
+    return x;
+}
+
+function f2q(x,q) {
+    var d = Math.round(x/q);
+    var r = x-d*q;
+    var p = {
+        d: 2*Math.PI*d,
+        r: r
+    };
+    return p;
+}
+
 function fmod(x,q) {
     var d = Math.floor(x/q);
     return x-d*q;
@@ -146,5 +164,7 @@ function SunAngles(date,pos) {
     //var az  = Math.atan2( yhor, xhor ) + Math.PI,
     //alt = Math.asin( zhor );
 
-    return Math.atan2( zhor, Math.sqrt(xhor*xhor+yhor*yhor) )//Math.asin( zhor );
+    return Math.atan2( zhor, Math.sqrt(xhor*xhor+yhor*yhor) );
+    //Math.asin( zhor );
 }
+
