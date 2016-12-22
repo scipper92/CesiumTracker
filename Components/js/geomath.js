@@ -37,7 +37,8 @@ function rEarth(fi){
 }
 
 function captureRadius(fi,roll,h){
-    return Math.asin((1+h/rEarth(fi))*Math.sin(roll))-roll;
+    //return Math.asin((1+h/rEarth(fi))*Math.sin(roll))-roll;
+    return Math.asin(h/rEarth(fi)*Math.tan(roll));
 }
 
 function fabs(x,q) {
@@ -63,7 +64,8 @@ function f2q(x,q) {
     var r = x-d*q;
     var p = {
         d: 2*Math.PI*d,
-        r: r
+        r: r,
+        near: false
     };
     return p;
 }
