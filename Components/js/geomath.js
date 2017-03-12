@@ -37,8 +37,8 @@ function rEarth(fi){
 }
 
 function captureRadius(fi,roll,h){
-    //return Math.asin((1+h/rEarth(fi))*Math.sin(roll))-roll;
-    return Math.asin(h/rEarth(fi)*Math.tan(roll));
+    return Math.asin((1+h/rEarth(fi))*Math.sin(roll))-roll;
+    //return Math.asin(h/rEarth(fi)*Math.tan(roll));
 }
 
 function fabs(x,q) {
@@ -170,3 +170,6 @@ function SunAngles(date,pos) {
     //Math.asin( zhor );
 }
 
+function scalarSphere(lat1,lat2,lng1,lng2){
+    return Math.sin(lat1)*Math.sin(lat2)+Math.cos(lat1)*Math.cos(lat2)*Math.cos(lng2-lng1);
+}

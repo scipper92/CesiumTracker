@@ -18,13 +18,13 @@ if(isset($_POST)){
     }
     chdir($home);
     $interval = $_POST['start'].'/'.$_POST['end'];
-    $fname = $_POST['sat'].'_'.$stamp.'.czml';
+    $fname = $stamp.'_'.mt_rand(1000,9999).'.czml';
     $position = $_POST['positions'];
     $n = count($position);
     $fd = fopen('./czml/'.$fname,"w");
     $step = $_POST['step'];
-    $Roll = tan(deg2rad($_POST['roll']))*$position[0]['h'];
-    $view = tan(deg2rad(0.5*$_POST['view']))*$position[0]['h'];
+    $Roll = $_POST['capture'];//tan(deg2rad($_POST['roll']))*700000;//$position[0]['h'];
+   // $view = tan(deg2rad(0.5*$_POST['view']))*$position[0]['h'];
     fwrite($fd,'[
   {
     "id":"document",
@@ -90,7 +90,7 @@ if(isset($_POST)){
       "scale":1.5,
       "show":true,
       "verticalOrigin":"CENTER"
-    },
+    },'./*
     "cylinder":{
       "length":'.$position[0]['h'] .',
       "topRadius":0.0,
@@ -104,7 +104,7 @@ if(isset($_POST)){
           }
         }
       }
-    },
+    },*/'
     "ellipse":{
       "semiMinorAxis":'.$Roll.',
       "semiMajorAxis":'.$Roll.',
@@ -156,7 +156,7 @@ if(isset($_POST)){
             ]
           }
         }
-      },
+      },'.'
       "leadTime":['
     );
 
@@ -208,15 +208,15 @@ if(isset($_POST)){
             '.$predict.','.$predict.'
           ]
         }
-      ],
+      ],'.'
       "resolution":'.$step.'
     },
     "position":{
       "interpolationAlgorithm":"LAGRANGE",
       "interpolationDegree":5,
-      "referenceFrame":"FIXED",
+      "referenceFrame":"INERTIAL",
       "epoch":"'.$_POST['start'].'",
-      "cartographicDegrees":[
+      "cartesian":[
       '
     );
 
@@ -224,12 +224,12 @@ if(isset($_POST)){
     $t = 0;
 
     for($i=0;$i<$n-1;$i++){
-        //fwrite($fd,"  ".$t.",".$position[$i]['X'].",".$position[$i]['Y'].",".$position[$i]['Y'].",\n      ");
-        fwrite($fd,"  ".$t.",".$position[$i]['lng'].",".$position[$i]['lat'].",".$position[$i]['h'].",\n      ");
+        fwrite($fd,"  ".$t.",".$position[$i]['X'].",".$position[$i]['Y'].",".$position[$i]['Z'].",\n      ");
+        //fwrite($fd,"  ".$t.",".$position[$i]['lng'].",".$position[$i]['lat'].",".$position[$i]['h'].",\n      ");
         $t += $step;
     }
-   // fwrite($fd,"  ".$t.",".$position[$n-1]['X'].",".$position[$n-1]['Y'].",".$position[$n-1]['Y']."\n      ");
-    fwrite($fd,"  ".$t.",".$position[$i]['lng'].",".$position[$i]['lat'].",".$position[$i]['h']."\n      ");
+    fwrite($fd,"  ".$t.",".$position[$n-1]['X'].",".$position[$n-1]['Y'].",".$position[$n-1]['Z']."\n      ");
+  //  fwrite($fd,"  ".$t.",".$position[$i]['lng'].",".$position[$i]['lat'].",".$position[$i]['h']."\n      ");
     fwrite($fd,']
     }
   }

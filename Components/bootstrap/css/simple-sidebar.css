@@ -28,7 +28,7 @@
     position: fixed;
     left: 300px;
     width: 0;
-    height: 80%;
+    height: 70%;
     margin-left: -300px;
     overflow-y: auto;
     background: #000;
@@ -142,7 +142,7 @@
     position: absolute;
     right: 0px;
     width: 300px;
-    height: 700px;
+    height: 75%;
     border: 3px solid #000000;
     padding: 10px;
     background: #ffffff;
